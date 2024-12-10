@@ -1,0 +1,5 @@
+{
+	"attr": "en",
+	"hello": "Hello ${ name }",
+	"world": "World"
+}
