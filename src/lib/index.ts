@@ -1,7 +1,7 @@
 import { lang, defaultLang } from '.lang';
 import { createSubscriber } from 'svelte/reactivity';
 
-export type Tranlations = (typeof lang)[typeof defaultLang];
+export type Tranlations = (typeof import('.lang').lang)[typeof defaultLang];
 
 export type AvailableLang = keyof typeof lang;
 
@@ -35,7 +35,7 @@ export class Lang {
 		};
 	});
 
-	#translationProxy = this.#createProxy() as Tranlations;
+	#translationProxy = this.#createProxy();
 
 	#resolveLang: (lang: string) => [AvailableLang, ...AvailableLang[]] = (str) => {
 		if (str in lang) {
@@ -48,11 +48,11 @@ export class Lang {
 		this.#langNotifiers.forEach((notify) => notify());
 	}
 
-	get translations() {
+	get translations(): (typeof import('.lang').lang)[typeof defaultLang] {
 		return this.#translationProxy;
 	}
 
-	get t() {
+	get t(): (typeof import('.lang').lang)[typeof defaultLang] {
 		return this.#translationProxy;
 	}
 
