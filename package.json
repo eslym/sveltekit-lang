@@ -1,6 +1,6 @@
 {
 	"name": "@eslym/sveltekit-lang",
-	"version": "1.0.0-beta.2",
+	"version": "1.0.0-beta.3",
 	"main": "./dist/index.js",
 	"devDependencies": {
 		"@sveltejs/adapter-auto": "^3.0.0",
@@ -18,8 +18,8 @@
 		"typescript": "^5.0.0"
 	},
 	"peerDependencies": {
-		"svelte": "^5.7.0",
-		"vite": "^5.0.0"
+		"svelte": ">=5.7.0",
+		"vite": ">=5.0.0"
 	},
 	"exports": {
 		".": {
