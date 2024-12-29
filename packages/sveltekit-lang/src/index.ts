@@ -192,7 +192,7 @@ async function compile(opts: {
             const com = compiled.get(current_key)!;
             svelteParams.translations += `this.#wrapReactive(${JSON.stringify(current_key)},{`;
             for (const [lang, js] of com.js) {
-                svelteParams.translations += `${lang}: ${js},`;
+                svelteParams.translations += `${JSON.stringify(lang)}: ${js},`;
             }
             svelteParams.translations += `})`;
             svelteParams.keysMapping += `[${JSON.stringify(current_key)}, (t) => t${mappings.get(current_key)}],`;
@@ -271,7 +271,7 @@ async function compile(opts: {
                     name: `snippet_${snippet_id}`,
                     body: svelte
                 });
-                svelteParams.svelteSnippetStruct += `${lang}: snippet_${snippet_id},`;
+                svelteParams.svelteSnippetStruct += `${JSON.stringify(lang)}: snippet_${snippet_id},`;
                 snippet_id++;
             }
             svelteParams.svelteSnippetStruct += `})`;
