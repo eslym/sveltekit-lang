@@ -1,5 +1,5 @@
 <script module>
-// This 
+// This is a generated file. Do not edit it directly.
 
 import { createSubscriber } from 'svelte/reactivity';
 
@@ -87,7 +87,8 @@ export class Localize {
 
     #get(key, params) {
         if(this.#keysMap.has(key)) {
-            return this.#keysMap.get(key)(this.#translations)(params);
+            const t = this.#keysMap.get(key)(this.#translations);
+            return typeof t === 'function' ? (params) : t;
         }
         throw new Error(`Key ${key} not found in translations`);
     }
