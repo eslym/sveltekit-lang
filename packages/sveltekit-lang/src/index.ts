@@ -360,12 +360,15 @@ function create_debounce(callback: () => Promise<void>, ms: number) {
         should_run = true;
         if (running) return;
         running = true;
-        while (should_run) {
-            should_run = false;
-            await callback();
-            await sleep(ms);
+        try {
+            while (should_run) {
+                should_run = false;
+                await callback();
+                await sleep(ms);
+            }
+        } finally {
+            running = false;
         }
-        running = false;
     };
 }
 
