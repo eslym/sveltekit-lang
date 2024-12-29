@@ -1,0 +1,7 @@
+{
+  "test": {
+    "function": "Hello ${ name() }",
+    "param": "Hello ${ name }",
+    "simple": "Hello World"
+  }
+}
