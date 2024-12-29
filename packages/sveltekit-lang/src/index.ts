@@ -284,10 +284,10 @@ async function compile(opts: {
                     .map((p) => `${p}: ${com.fns.has(p) ? 'SnippetFormatFn' : 'SnippetParam'}`)
                     .join(',');
                 dtsParams.snippetsType += `Snippet<[{${params}}]>`;
-                dtsParams.snippetMapping += `[param: {${params}}]`;
+                dtsParams.snippetMapping += `[param: {${params}}],`;
             } else {
                 dtsParams.snippetsType += `Snippet<[]>`;
-                dtsParams.snippetMapping += `[]`;
+                dtsParams.snippetMapping += `[],`;
             }
 
             return;
