@@ -104,6 +104,9 @@ export class Localize {
         const sub = this.#langSub;
         const tries = () => this.#tries;
         return {
+            configurable: false,
+            enumerable: true,
+            writable: false,
             get() {
                 sub();
                 return tryLangs(tries(), candidates, path);
