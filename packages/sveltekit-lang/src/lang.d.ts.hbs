@@ -30,6 +30,6 @@ declare module {{{ alias }}} {
         get<K extends TranslationKeys>(key: K, ...args: KeyMapping[K]): string;
         snippet<K extends keyof SnippetMapping>(key: K): Snippet<SnippetMapping[K]>;
 
-        pick<T extends Partial<Record<AvailableLang, any>>>(candidates: T): Exclude<T[AvailableLang], undefined>;
+        pick<T extends { [defaultLocale]: V } & Partial<Record<Exclude<AvailableLang, typeof defaultLocale>, T['en']>>>(candidates: T): T[typeof defaultLocale];
     }
 }
