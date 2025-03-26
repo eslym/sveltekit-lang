@@ -224,13 +224,18 @@ export function compile_template(tokens: Iterable<Token>): CompileResult {
                 svelte += token.char.replace(/(\{<)/, "{'$1'}");
                 break;
             case 'variable':
-                if (fns.has(token.name)) {
-                    throw new Error(`Variable '${token.name}' is already used as function name`);
+                {
+                    if (fns.has(token.name)) {
+                        throw new Error(
+                            `Variable '${token.name}' is already used as function name`
+                        );
+                    }
+                    const fallback = JSON.stringify(`\${ ${token.name} }`);
+                    js += '${ ' + token.name + ' ?? ' + fallback + ' }';
+                    svelte += `{@render var_helper(params.${token.name} ?? ${fallback}, var_helper)}`;
+                    params.add(token.name);
+                    vars.add(token.name);
                 }
-                js += '${ ' + token.name + ' ?? "" }';
-                svelte += `{@render var_helper(params.${token.name}, var_helper)}`;
-                params.add(token.name);
-                vars.add(token.name);
                 break;
             case 'invoke':
                 if (vars.has(token.name)) {
@@ -244,8 +249,9 @@ export function compile_template(tokens: Iterable<Token>): CompileResult {
                               ? 'null'
                               : JSON.stringify(token.param.value)
                         : token.param.name;
-                js += '${ ' + token.name + '?.(' + param + ') ?? "" }';
-                svelte += `{@render var_helper(params.${token.name}, ${ param })}`;
+                const fallback = JSON.stringify(`\${ ${token.name}(${param}) }`);
+                js += '${ ' + token.name + '?.(' + param + ') ?? ' + fallback + ' }';
+                svelte += `{@render var_helper(params.${token.name} ?? ${fallback}, ${param})}`;
                 params.add(token.name);
                 fns.add(token.name);
                 if (token.param.type === 'variable') {

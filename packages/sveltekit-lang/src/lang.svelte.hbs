@@ -73,6 +73,11 @@ export class Localize {
         return this.#snippet
     }
 
+    get pick() {
+        this.#langSub();
+        return this.#pick
+    }
+
     constructor() {
         this.#translations = {{{ translations }}};
         this.#snippets = {{{  svelteSnippetStruct }}};
@@ -83,6 +88,11 @@ export class Localize {
         this.#tries = this.#tryLangs(this.#lang);
         this.#langNotify?.();
         return this;
+    }
+
+    #pick(candidates) {
+        this.#langSub();
+        return tryLangs(this.#tries, candidates, '<#pick>');
     }
 
     #get(key, params) {
