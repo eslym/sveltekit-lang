@@ -40,3 +40,4 @@ await Bun.build({
 });
 
 await Bun.$`cp src/types.d.ts dist/index.d.ts`;
+await Bun.$`cp -r src/runtime dist/runtime`;

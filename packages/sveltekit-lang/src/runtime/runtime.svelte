@@ -2,14 +2,20 @@
     import { untrack } from 'svelte';
     import Self from './runtime.svelte';
 
-    export const localizeSymbol = Symbol('localization');
+    const noop = () => {};
+
+    export const localize_symbol = Symbol('path');
 
     const valueSymbol = Symbol('value');
     const snippetSymbol = Symbol('snippet');
     const componentSymbol = Symbol('component');
+
+    const valueProxySymbol = Symbol('valueProxy');
+    const snippetProxySymbol = Symbol('snippetProxy');
+    const componentProxySymbol = Symbol('componentProxy');
     
     function create_snippet(tokens) {
-        return ($$anchor, params) => renderer($$anchor, ()=>tokens, params);
+        return ($$anchor, params = noop) => renderer($$anchor, ()=>tokens, params);
     }
 
     function create_component(tokens) {
@@ -25,17 +31,26 @@
         }
     }
 
+    function token_helper(token, params) {
+        if (typeof token === 'string') {
+            return token;
+        }
+        const val = token(params);
+        if (typeof val === 'function') {
+            return `${val(val.param?.(params))}`;
+        }
+        return `${val}`;
+    }
+
     function create_value(tokens) {
+        if (tokens.length === 0) {
+            return '';
+        }
         if (tokens.length === 1) {
-            const value = tokens[0];
-            return new Proxy(value, {
-                apply(target) {
-                    return target;
-                }
-            });
+            return tokens[0];
         }
         return (params) =>
-            tokens.map((t) => (typeof t === 'function' ? t(params) : t.toString())).join('');
+            tokens.map((t) => token_helper(t, params)).join('');
     }
 
     function pick(tries, candidates, key = '<#pick>') {
@@ -52,11 +67,11 @@
             get(target, prop) {
                 const value = Reflect.get(target, prop);
                 if(!value || typeof value !== 'object') return value;
-                if (localizeSymbol in value) {
-                    const tokens = pick(langs(), value);
+                if (localize_symbol in value) {
+                    const tokens = pick(langs(), value, value[localize_symbol]);
                     return tokens[valueSymbol] ??= create_value(tokens);
                 }
-                return value_proxy(value, langs);
+                return target[valueProxySymbol] ??= value_proxy(value, langs);
             },
             set() {
                 throw new Error('Cannot set value on a proxy');
@@ -72,11 +87,11 @@
             get(target, prop) {
                 const value = Reflect.get(target, prop);
                 if(!value || typeof value !== 'object') return value;
-                if (localizeSymbol in value) {
-                    const tokens = pick(langs(), value);
+                if (localize_symbol in value) {
+                    const tokens = pick(langs(), value, value[localize_symbol]);
                     return tokens[snippetSymbol] ??= create_snippet(tokens);
                 }
-                return snippet_proxy(value, langs);
+                return target[snippetProxySymbol] ??= snippet_proxy(value, langs);
             },
             set() {
                 throw new Error('Cannot set value on a proxy');
@@ -92,11 +107,11 @@
             get(target, prop) {
                 const value = Reflect.get(target, prop);
                 if(!value || typeof value !== 'object') return value;
-                if (localizeSymbol in value) {
-                    const tokens = pick(langs(), value);
+                if (localize_symbol in value) {
+                    const tokens = pick(langs(), value, value[localize_symbol]);
                     return tokens[componentSymbol] ??= create_component(tokens);
                 }
-                return component_proxy(value, langs);
+                return target[componentProxySymbol] ??= component_proxy(value, langs);
             },
             set() {
                 throw new Error('Cannot set value on a proxy');
@@ -139,7 +154,7 @@
                 return config.value;
             },
             set value(value) {
-                current = value;
+                config.value = value;
             },
             get current() {
                 return current;
@@ -165,7 +180,7 @@
 </script>
 
 {#snippet var_helper(value, param) }
-    {#if value instanceof Function }
+    {#if typeof value === 'function' }
         {@render value(param, var_helper) }
     {:else}
         {value}
@@ -175,7 +190,7 @@
 {#snippet renderer(tokens, params)}
     {#each tokens as token}
         {#if typeof token === 'function'}
-            {@render var_helper(token(params), token.param)}
+            {@render var_helper(token(params), token.param?.(params))}
         {:else}
             {token}
         {/if}

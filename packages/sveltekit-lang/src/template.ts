@@ -1,3 +1,5 @@
+import { T } from './generate';
+
 //#region REGEX
 const TEST_START_EXPR = /^\$\{/;
 const TEST_END_EXPR = /^\s*\}/;
@@ -8,34 +10,18 @@ const TEST_LITERAL =
 const TEST_START_INVOKE = /\s*\(/;
 const TEST_END_INVOKE = /\s*\)/;
 const TEST_ESCAPE = /\\/;
-const TEST_CONTENT = /./;
+const TEST_CONTENT = /./v;
 //#endregion
 
 type LiteralOrVar =
-    | {
-          type: 'literal';
-          value: string | null | undefined;
-      }
-    | {
-          type: 'variable';
-          name: string;
-      };
+    | { type: 'literal'; value: string | null | undefined }
+    | { type: 'variable'; name: string };
 
 export type Token =
-    | {
-          type: 'content';
-          content: string;
-      }
-    | {
-          type: 'escape';
-          char: string;
-      }
+    | { type: 'content'; content: string }
+    | { type: 'escape'; char: string }
     | LiteralOrVar
-    | {
-          type: 'invoke';
-          name: string;
-          param: LiteralOrVar;
-      };
+    | { type: 'invoke'; name: string; param: LiteralOrVar };
 
 type ProcessFunc = (matches: RegExpMatchArray, cursor: string) => Generator<Token>;
 type Expects = [RegExp, ProcessFunc][];
@@ -199,29 +185,31 @@ export function* parse_template(src: string): Generator<Token> {
     yield* yieldContent();
 }
 
-export type CompileResult = {
-    js: string;
-    svelte: string;
-    params: Set<string>;
-    fns: Set<string>;
-};
+export type CompileResult = { js: string; params: Set<string>; fns: Set<string> };
 
 export function compile_template(tokens: Iterable<Token>): CompileResult {
-    let js = '';
-    let svelte = '';
     let vars = new Set<string>();
     let params = new Set<string>();
     let fns = new Set<string>();
 
+    const js_tokens: (['str', string] | ['fn', string])[] = [];
+
+    function push_string(str: string) {
+        const last = js_tokens[js_tokens.length - 1];
+        if (last && last[0] === 'str') {
+            last[1] += str;
+        } else {
+            js_tokens.push(['str', str]);
+        }
+    }
+
     for (const token of tokens) {
         switch (token.type) {
             case 'content':
-                js += token.content.replace('`', '\\`');
-                svelte += token.content.replace(/(\{<)/, "{'$1'}");
+                push_string(token.content);
                 break;
             case 'escape':
-                js += '\\' + token.char;
-                svelte += token.char.replace(/(\{<)/, "{'$1'}");
+                push_string(token.char);
                 break;
             case 'variable':
                 {
@@ -230,9 +218,7 @@ export function compile_template(tokens: Iterable<Token>): CompileResult {
                             `Variable '${token.name}' is already used as function name`
                         );
                     }
-                    const fallback = JSON.stringify(`\${ ${token.name} }`);
-                    js += '${ ' + token.name + ' ?? ' + fallback + ' }';
-                    svelte += `{@render var_helper(params.${token.name} ?? ${fallback}, var_helper)}`;
+                    js_tokens.push(['fn', `(p) => \`\${p?.${token.name}}\``]);
                     params.add(token.name);
                     vars.add(token.name);
                 }
@@ -249,9 +235,10 @@ export function compile_template(tokens: Iterable<Token>): CompileResult {
                               ? 'null'
                               : JSON.stringify(token.param.value)
                         : token.param.name;
-                const fallback = JSON.stringify(`\${ ${token.name}(${param}) }`);
-                js += '${ ' + token.name + '?.(' + param + ') ?? ' + fallback + ' }';
-                svelte += `{@render var_helper(params.${token.name} ?? ${fallback}, ${param})}`;
+                const param_js =
+                    token.param.type === 'literal' ? `()=>${param}` : `(p)=>p?.${param}`;
+                const js = `oa((p)=> p?.${token.name}, { param: ${param_js} })`;
+                js_tokens.push(['fn', js]);
                 params.add(token.name);
                 fns.add(token.name);
                 if (token.param.type === 'variable') {
@@ -266,9 +253,14 @@ export function compile_template(tokens: Iterable<Token>): CompileResult {
                 break;
         }
     }
-    let code: string = '`' + js + '`';
-    if (params.size) {
-        code = `({${Array.from(params).join(',')}}) => ` + code;
-    }
-    return { js: code, svelte, params, fns };
+
+    let code: string =
+        '[' +
+        js_tokens
+            .filter(([t, v]) => t !== 'str' || v)
+            .map(([t, v]) => (t === 'str' ? JSON.stringify(v) : v))
+            .join(',') +
+        ']';
+
+    return { js: code, params, fns };
 }

@@ -1,8 +1,18 @@
 {
   "name": "@eslym/sveltekit-lang",
+  "version": "2.0.1",
   "module": "index.ts",
-  "version": "1.0.10",
-  "type": "module",
+  "devDependencies": {
+    "@eslym/tinybars": "^1.0.11",
+    "@types/bun": "latest",
+    "comment-json": "^4.2.5",
+    "tiny-glob": "^0.2.9",
+    "typescript": "^5.0.0"
+  },
+  "peerDependencies": {
+    "svelte": ">=5.7.0",
+    "vite": ">=5.0.0"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -17,15 +27,5 @@
   "files": [
     "dist"
   ],
-  "devDependencies": {
-    "@eslym/tinybars": "^1.0.11",
-    "@types/bun": "latest",
-    "comment-json": "^4.2.5",
-    "tiny-glob": "^0.2.9",
-    "typescript": "^5.0.0"
-  },
-  "peerDependencies": {
-    "svelte": ">=5.7.0",
-    "vite": ">=5.0.0"
-  }
+  "type": "module"
 }

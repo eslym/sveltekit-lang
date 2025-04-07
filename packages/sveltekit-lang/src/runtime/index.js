@@ -1,1 +1,1 @@
-export { localizeSymbol, create_localize } from './runtime.svelte';
+export { localize_symbol, create_localize } from './runtime.svelte';

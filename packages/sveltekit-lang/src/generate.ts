@@ -49,12 +49,23 @@ export namespace T {
                 if (typeof name === 'object' && RAW in name) {
                     return concat(name[RAW], ': ', indent(value));
                 }
-                const key = JSON.stringify(str(name));
+                const key = str(name);
                 return concat(replace[key] ?? key, ': ', indent(value));
             }),
             ',\n  '
         );
         yield* '\n}';
+    }
+
+    export function* indent(iter: Iterable<string>, level: number = 1) {
+        for (const s of iter) {
+            for (const c of s) {
+                yield c;
+                if (c === '\n') {
+                    yield* '  '.repeat(level);
+                }
+            }
+        }
     }
 
     export function lf(lines: Iterable<Iterable<string>>) {
@@ -149,7 +160,7 @@ export namespace T {
                 map(value, (v) => stringify(v, replace)),
                 ', '
             );
-            yield* ']';
+            yield* '\n]';
             return;
         }
         switch (typeof value) {
@@ -158,7 +169,7 @@ export namespace T {
                 return;
             case 'object':
                 yield* obj(
-                    Object.entries(value).map(([key, value]) => [key, stringify(value, replace)]),
+                    Object.entries(value).map(([key, value]) => [stringify(key), stringify(value, replace)]),
                     replace
                 );
                 return;

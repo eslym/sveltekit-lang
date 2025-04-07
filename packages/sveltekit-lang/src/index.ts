@@ -1,38 +1,15 @@
 import glob from 'tiny-glob';
 import CommentJSON from 'comment-json';
-import generateLangDTS from './lang.d.ts.hbs';
-import generateLangSvelte from './lang.svelte.hbs';
-import generateSnippet from './snippet.hbs';
-import { join, dirname } from 'path';
+import { join } from 'path';
 import type { Plugin } from 'vite';
 import type { PluginOptions } from './types';
 import { compile_template, parse_template } from './template';
-import { readFile, writeFile, mkdir } from 'fs/promises';
-import { existsSync } from 'fs';
-
-type LangDTSParams = {
-    alias: string;
-    availableLangs: string;
-    defaultLocale: string;
-    translationMapping: string;
-    snippetMapping: string;
-    translationsType: string;
-    snippetsType: string;
-};
-
-type LangSvelteParams = {
-    availableLangs: string;
-    defaultLocale: string;
-    translations: string;
-    svelteSnippetStruct: string;
-    keysMapping: string;
-    snippetsMapping: string;
-    snippets: string;
-};
+import { readFile, writeFile } from 'fs/promises';
+import { concat, T } from './generate';
 
 const DEFAULT_OPTIONS = {
     langPath: './lang',
-    sveltePath: './.svelte-kit/generated/lang.svelte',
+    sveltePath: './.svelte-kit/generated/lang.svelte.js',
     typesPath: './src/lang.d.ts',
     alias: '$lang',
     svelteSnippets: false
@@ -112,15 +89,9 @@ async function compile(opts: {
     const mappings = new Map<string, string>();
     const compiled = new Map<
         string,
-        {
-            params: Set<string>;
-            fns: Set<string>;
-            snippets: Map<string, string>;
-            js: Map<string, string>;
-        }
+        { params: Set<string>; fns: Set<string>; js: Map<string, string> }
     >();
     const trans: Record<string, any> = {};
-    const snippets: Record<string, any> = {};
     const json_paths = await glob('*.json', { cwd: opts.lang_path, absolute: false });
 
     await Promise.all(
@@ -149,204 +120,121 @@ async function compile(opts: {
                     if (!compare_signature(existing, res)) {
                         throw new Error(`Parameter mismatch: ${key}`);
                     }
-                    if (res.fns.size) {
-                        existing.snippets.set(lang, res.svelte);
-                    }
                     existing.js.set(lang, res.js);
                 } else {
                     compiled.set(key, {
                         params: res.params,
                         fns: res.fns,
-                        snippets: res.fns.size ? new Map([[lang, res.svelte]]) : new Map(),
                         js: new Map([[lang, res.js]])
                     });
-                    if (res.fns.size) set(snippets, path, key);
                 }
             });
         })
     );
 
-    const dtsParams: LangDTSParams = {
-        alias: JSON.stringify(opts.alias),
-        availableLangs: [...availables].map((l) => JSON.stringify(l)).join(' | '),
-        defaultLocale: JSON.stringify(opts.default_locale),
-        translationMapping: '{',
-        snippetMapping: '{',
-        translationsType: '',
-        snippetsType: ''
-    };
-
-    const svelteParams: LangSvelteParams = {
-        availableLangs: JSON.stringify([...availables]),
-        defaultLocale: JSON.stringify(opts.default_locale),
-        translations: '',
-        svelteSnippetStruct: '',
-        keysMapping: '',
-        snippetsMapping: '',
-        snippets: ''
-    };
-
-    function walk_js(obj: any, path: (string | number)[]) {
+    function walk_js(
+        obj: any,
+        path: (string | number)[]
+    ): { js: Iterable<string>; dts: Iterable<string> } {
         const current_key = path.join('.');
         if (typeof obj === 'string') {
             const com = compiled.get(current_key)!;
-            svelteParams.translations += `this.#wrapReactive(${JSON.stringify(current_key)},{`;
-            for (const [lang, js] of com.js) {
-                svelteParams.translations += `${JSON.stringify(lang)}: ${js},`;
-            }
-            svelteParams.translations += `})`;
-            svelteParams.keysMapping += `[${JSON.stringify(current_key)}, (t) => t${mappings.get(current_key)}],`;
-
-            dtsParams.translationMapping += `${JSON.stringify(current_key)}: `;
-
-            if (com.params.size) {
-                const params = [...com.params]
-                    .map((p) => `${p}: ${com.fns.has(p) ? 'FormatFn' : 'Param'}`)
-                    .join(',');
-                dtsParams.translationsType += `(params: {${params}}) => string`;
-                dtsParams.translationMapping += `[param: {${params}}],`;
-            } else {
-                dtsParams.translationsType += `string`;
-                dtsParams.translationMapping += `[],`;
-            }
-
-            return;
+            const js = T.obj([
+                ['[path]', T.stringify(path.join('.'))],
+                ...com.js.entries()
+            ]);
+            const dts = com.params.size
+                ? concat(
+                      '[',
+                      T.obj(
+                          Array.from(com.params).map(
+                              (p) => [p, com.fns.has(p) ? 'FormatFn' : 'Param'] as const
+                          )
+                      ),
+                      ']'
+                  )
+                : '[]';
+            return { js, dts };
         }
         const keys = Object.keys(obj);
-        const should_reactive = new Set<string>();
+        const jss: [Iterable<string>, Iterable<string>][] = [];
+        const dtss: [Iterable<string>, Iterable<string>][] = [];
         for (const key of keys) {
-            if (typeof obj[key] === 'string') {
-                should_reactive.add(key);
-            }
+            const { js, dts } = walk_js(obj[key], [...path, key]);
+            jss.push([key, js]);
+            dtss.push([key, dts]);
         }
-        dtsParams.translationsType += `{`;
-        svelteParams.translations += `Object.freeze(`;
-        if (should_reactive.size) {
-            svelteParams.translations += `Object.defineProperties({`;
-            for (const key of keys) {
-                if (should_reactive.has(key)) continue;
-                svelteParams.translations += `${JSON.stringify(key)}:`;
-                dtsParams.translationsType += `readonly ${JSON.stringify(key)}: `;
-                walk_js(obj[key], [...path, key]);
-                svelteParams.translations += ',';
-                dtsParams.translationsType += `,`;
-            }
-            svelteParams.translations += `},{`;
-            for (const key of should_reactive) {
-                svelteParams.translations += `${JSON.stringify(key)}: `;
-                dtsParams.translationsType += `readonly ${JSON.stringify(key)}: `;
-                walk_js(obj[key], [...path, key]);
-                svelteParams.translations += ',';
-                dtsParams.translationsType += `,`;
-            }
-            svelteParams.translations += `})`;
-        } else {
-            svelteParams.translations += `{`;
-            for (const key of keys) {
-                svelteParams.translations += `${JSON.stringify(key)}: `;
-                dtsParams.translationsType += `readonly ${JSON.stringify(key)}: `;
-                walk_js(obj[key], [...path, key]);
-                svelteParams.translations += ',';
-                dtsParams.translationsType += `,`;
-            }
-            svelteParams.translations += `}`;
-        }
-        svelteParams.translations += `)`;
-        dtsParams.translationsType += `}`;
+        const js = T.obj(jss);
+        const dts = T.obj(dtss);
+        return { js, dts };
     }
 
-    walk_js(trans, []);
+    const { js, dts } = walk_js(trans, []);
 
-    dtsParams.translationMapping += '}';
+    const lang_svelte_js = T.str(
+        T.lf([
+            'import { localize_symbol as path, create_localize } from "@eslym/sveltekit-lang/runtime";',
+            '',
+            'const oa = Object.assign.bind(Object);',
+            '',
+            T.code`export const availableLocales = new Set(${T.stringify(Array.from(availables))});`,
+            T.code`export const defaultLocale = ${T.stringify(opts.default_locale)};`,
+            '',
+            T.code`const translations = ${js};`,
+            '',
+            'export const localize = oa((config = {})=>{',
+            '  let value = $state(defaultLocale);',
+            '  return create_localize({',
+            '    get value(){',
+            '      return value;',
+            '    },',
+            '    set value(v){',
+            '      value = v;',
+            '    },',
+            '    get resolve(){',
+            '      return config.resolve;',
+            '    },',
+            '    get tries(){',
+            '      return config.tries;',
+            '    },',
+            '  }, translations);',
+            '}, {',
+            '  derived(getter, config = {}){',
+            '    let value = $derived.by(getter);',
+            '    return create_localize({',
+            '      get value(){',
+            '        return value;',
+            '      },',
+            '      get resolve(){',
+            '        return config.resolve;',
+            '      },',
+            '      get tries(){',
+            '        return config.tries;',
+            '      },',
+            '    }, translations);',
+            '  },',
+            '});'
+        ])
+    );
+    const lang_dts = T.str(
+        T.lf([
+            'declare module "$lang" {',
+            '  import type { Param, FormatFn, LocalizeFn } from "@eslym/sveltekit-lang/runtime";',
+            '',
+            T.code`  export type AvailableLocale = ${T.join(
+                T.map(Array.from(availables), (l) => T.stringify(l)),
+                ' | '
+            )}`,
+            T.code`  export type DefaultLocale = ${T.stringify(opts.default_locale)};`,
+            '  export declare const availableLocales: Omit<Set<string>, "has"> & { has(value: any): value is AvailableLocale };',
+            '  export declare const defaultLocale: DefaultLocale;',
+            T.code`  export declare const localize: LocalizeFn<${T.indent(dts)}, DefaultLocale, AvailableLocale>;`,
+            '}'
+        ])
+    );
 
-    let snippet_id = 0;
-
-    function walk_snippets(obj: any, path: (string | number)[]) {
-        const current_key = path.join('.');
-        if (typeof obj === 'string') {
-            const com = compiled.get(current_key)!;
-            svelteParams.svelteSnippetStruct += `this.#wrapReactive(${JSON.stringify(current_key)},{`;
-            for (const [lang, svelte] of com.snippets) {
-                svelteParams.snippets += generateSnippet({
-                    name: `snippet_${snippet_id}`,
-                    body: svelte
-                });
-                svelteParams.svelteSnippetStruct += `${JSON.stringify(lang)}: snippet_${snippet_id},`;
-                snippet_id++;
-            }
-            svelteParams.svelteSnippetStruct += `})`;
-            svelteParams.snippetsMapping += `[${JSON.stringify(current_key)}, (s) => s${mappings.get(current_key)}],`;
-
-            dtsParams.snippetMapping += `${JSON.stringify(current_key)}: `;
-
-            if (com.params.size) {
-                const params = [...com.params]
-                    .map((p) => `${p}: ${com.fns.has(p) ? 'SnippetFormatFn' : 'SnippetParam'}`)
-                    .join(',');
-                dtsParams.snippetsType += `Snippet<[{${params}}]>`;
-                dtsParams.snippetMapping += `[param: {${params}}],`;
-            } else {
-                dtsParams.snippetsType += `Snippet<[]>`;
-                dtsParams.snippetMapping += `[],`;
-            }
-
-            return;
-        }
-        const keys = Object.keys(obj);
-        const should_reactive = new Set<string>();
-        for (const key of keys) {
-            if (typeof obj[key] === 'string') {
-                should_reactive.add(key);
-            }
-        }
-        dtsParams.snippetsType += `{`;
-        svelteParams.svelteSnippetStruct += `Object.freeze(`;
-        if (should_reactive.size) {
-            svelteParams.svelteSnippetStruct += `Object.defineProperties({`;
-            for (const key of keys) {
-                if (should_reactive.has(key)) continue;
-                svelteParams.svelteSnippetStruct += `${JSON.stringify(key)}:`;
-                dtsParams.snippetsType += `readonly ${JSON.stringify(key)}: `;
-                walk_snippets(obj[key], [...path, key]);
-                svelteParams.svelteSnippetStruct += ',';
-                dtsParams.snippetsType += `,`;
-            }
-            svelteParams.svelteSnippetStruct += `},{`;
-            for (const key of should_reactive) {
-                svelteParams.svelteSnippetStruct += `${JSON.stringify(key)}: `;
-                dtsParams.snippetsType += `readonly ${JSON.stringify(key)}: `;
-                walk_snippets(obj[key], [...path, key]);
-                svelteParams.svelteSnippetStruct += ',';
-                dtsParams.snippetsType += `,`;
-            }
-            svelteParams.svelteSnippetStruct += `})`;
-        } else {
-            svelteParams.svelteSnippetStruct += `{`;
-            for (const key of keys) {
-                svelteParams.svelteSnippetStruct += `${JSON.stringify(key)}: `;
-                dtsParams.snippetsType += `readonly ${JSON.stringify(key)}: `;
-                walk_snippets(obj[key], [...path, key]);
-                svelteParams.svelteSnippetStruct += ',';
-                dtsParams.snippetsType += `,`;
-            }
-            svelteParams.svelteSnippetStruct += `}`;
-        }
-        svelteParams.svelteSnippetStruct += `)`;
-        dtsParams.snippetsType += `}`;
-    }
-
-    walk_snippets(snippets, []);
-
-    dtsParams.snippetMapping += '}';
-
-    if (!existsSync(dirname(opts.types_path))) {
-        await mkdir(dirname(opts.types_path), { recursive: true });
-    }
-    if (!existsSync(dirname(opts.svelte_path))) {
-        await mkdir(dirname(opts.svelte_path), { recursive: true });
-    }
-    await writeFile(opts.svelte_path, generateLangSvelte(svelteParams), 'utf-8');
-    await writeFile(opts.types_path, generateLangDTS(dtsParams), 'utf-8');
+    await writeFile(opts.svelte_path, lang_svelte_js, 'utf-8');
+    await writeFile(opts.types_path, lang_dts, 'utf-8');
 }
 
 function sleep(ms: number) {
@@ -408,13 +296,7 @@ export default function sveltekitLang(options: PluginOptions): Plugin {
                 default_locale: opts.defaultLocale
             };
             await compile(c_opt);
-            return {
-                resolve: {
-                    alias: {
-                        [opts.alias]: c_opt.svelte_path
-                    }
-                }
-            };
+            return { resolve: { alias: { [opts.alias]: c_opt.svelte_path } } };
         }
     };
 }

@@ -48,15 +48,31 @@ export type TranslationComponents<T extends Record<string, any>> = {
             : never;
 };
 
-export interface Localize<T extends Record<string, any>, L = string> {
+export interface Localize<T extends Record<string, any>, D extends string, L extends string> {
     readonly value: string;
     readonly current: string;
     T: TranslationValues<T>;
     S: TranslationSnippets<T>;
     C: TranslationComponents<T>;
-    as(locale: string): Localize<T>;
-    pick<T extends { [K in L]: any } & { [key in string]?: T[L] }>(candidates: T): T[L];
+    as(locale: L): Localize<T>;
+    pick<T extends { [K in D]: any } & { [key in L]?: T[D] }>(candidates: T): T[D];
 }
 
-export const localizeSymbol: unique symbol;
+export type WritableLocalize<
+    T extends Record<string, any>,
+    D extends string,
+    L extends string
+> = Omit<Localize<T, D, L>, 'value'> & { value: string };
+
+export type LocalizeFn<T extends Record<string, any>, D extends string, L extends string> = {
+    (
+        config?: { resolve?: (value: string) => L, tries?: (value: L) => [L, ...L[]] }
+    ): WritableLocalize<T, D, L>;
+    derived(
+        getter: () => string,
+        config?: { resolve?: (value: string) => L; tries?: (value: L) => [L, ...L[]] }
+    ): Localize<T, D, L>;
+};
+
+export const localize_symbol: unique symbol;
 export function create_localize(config: { value: string }, translations: Record<string, any>): any;

@@ -1,40 +1,45 @@
 <script lang="ts" module>
-    import { availableLangs, Localize } from '$lang';
+    import { availableLocales, localize } from '$lang';
 
-    const Localization = new Localize();
-    const T = Localization.translations;
+    const L = localize();
 </script>
 <script lang="ts">
-    let name = $state('World');
+    let world = $state('World');
 </script>
 
 <p>
-    <select bind:value={Localization.lang}>
-        {#each availableLangs as lang}
+    <select bind:value={L.value}>
+        {#each availableLocales as lang}
             <option value={lang}>{lang}</option>
         {/each}
     </select>
 </p>
 
 <p>
-    <input type="text" bind:value={name}/>
+    <input type="text" bind:value={world}/>
 </p>
 
 <p>
-    {T.test.simple}
+    {L.T.test.simple}
 </p>
 
 <p>
-    {T.test.param({ name })}
+    {L.T.test.param({ name: world })}
 </p>
 
 <p>
-    {T.test.function({ name: ()=>name })}
+    {L.T.test.function({ name: () => world })}
 </p>
-
 <p>
-    {#snippet bold_name(val: any) }
-        <strong>{name}</strong>
+    {#snippet bold_name() }
+        <strong>{world}</strong>
     {/snippet}
-    {@render Localization.snippets.test.function({ name: bold_name })}
+    {@render L.S.test.function({ name: bold_name })}
+</p>
+<p>
+    <L.C.test.function>
+        {#snippet name()}
+            <strong>{world}</strong>
+        {/snippet}
+    </L.C.test.function>
 </p>

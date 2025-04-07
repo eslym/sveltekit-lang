@@ -1,0 +1,5 @@
+{
+    "i18n-ally.localesPaths": [
+        "packages/sveltekit-lang-test/lang"
+    ]
+}
