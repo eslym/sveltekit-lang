@@ -10,9 +10,16 @@
     const snippetSymbol = Symbol('snippet');
     const componentSymbol = Symbol('component');
 
-    const valueProxySymbol = Symbol('valueProxy');
-    const snippetProxySymbol = Symbol('snippetProxy');
-    const componentProxySymbol = Symbol('componentProxy');
+    function weak_map_get(target, sym, key, init){
+        if (!target[sym]) {
+            target[sym] = new WeakMap();
+        }
+        let map = target[sym];
+        if (!map.has(key)) {
+            map.set(key, init());
+        }
+        return map.get(key);
+    }
     
     function create_snippet(tokens) {
         return ($$anchor, params = noop) => renderer($$anchor, ()=>tokens, params);
@@ -69,9 +76,9 @@
                 if(!value || typeof value !== 'object') return value;
                 if (localize_symbol in value) {
                     const tokens = pick(langs(), value, value[localize_symbol]);
-                    return tokens[valueSymbol] ??= create_value(tokens);
+                    return weak_map_get(tokens, valueSymbol, langs, create_value.bind(null, tokens));
                 }
-                return target[valueProxySymbol] ??= value_proxy(value, langs);
+                return weak_map_get(value, valueSymbol, langs, value_proxy.bind(null, value, langs));
             },
             set() {
                 throw new Error('Cannot set value on a proxy');
@@ -89,9 +96,9 @@
                 if(!value || typeof value !== 'object') return value;
                 if (localize_symbol in value) {
                     const tokens = pick(langs(), value, value[localize_symbol]);
-                    return tokens[snippetSymbol] ??= create_snippet(tokens);
+                    return weak_map_get(tokens, snippetSymbol, langs, create_snippet.bind(null, tokens));
                 }
-                return target[snippetProxySymbol] ??= snippet_proxy(value, langs);
+                return weak_map_get(value, snippetSymbol, langs, snippet_proxy.bind(null, value, langs));
             },
             set() {
                 throw new Error('Cannot set value on a proxy');
@@ -109,9 +116,9 @@
                 if(!value || typeof value !== 'object') return value;
                 if (localize_symbol in value) {
                     const tokens = pick(langs(), value, value[localize_symbol]);
-                    return tokens[componentSymbol] ??= create_component(tokens);
+                    return weak_map_get(tokens, componentSymbol, langs, create_component.bind(null, tokens));
                 }
-                return target[componentProxySymbol] ??= component_proxy(value, langs);
+                return weak_map_get(value, componentSymbol, langs, component_proxy.bind(null, value, langs));
             },
             set() {
                 throw new Error('Cannot set value on a proxy');
@@ -126,9 +133,11 @@
         let current = $derived(config.resolve ? config.resolve(config.value) : config.value);
         let tries = $derived(config.tries ? config.tries(current) : [current]);
 
-        const values = value_proxy(translations, () => tries);
-        const snippets = snippet_proxy(translations, () => tries);
-        const components = component_proxy(translations, () => tries);
+        const get_tries = () => tries;
+
+        const values = value_proxy(translations, get_tries);
+        const snippets = snippet_proxy(translations, get_tries);
+        const components = component_proxy(translations, get_tries);
 
         const as = (value) => create_localize({
             get value() {
