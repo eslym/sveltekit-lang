@@ -1,6 +1,6 @@
 {
   "name": "@eslym/sveltekit-lang",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "module": "index.ts",
   "devDependencies": {
     "@eslym/tinybars": "^1.0.11",

@@ -3,8 +3,15 @@
 
     const L = localize();
 </script>
+
 <script lang="ts">
     let world = $state('World');
+
+    if(!import.meta.env.SSR) {
+        $effect.pre(() => {
+            document.documentElement.lang = L.T.attr;
+        });
+    }
 </script>
 
 <p>
@@ -14,19 +21,15 @@
         {/each}
     </select>
 </p>
-
 <p>
     <input type="text" bind:value={world}/>
 </p>
-
 <p>
     {L.T.test.simple}
 </p>
-
 <p>
     {L.T.test.param({ name: world })}
 </p>
-
 <p>
     {L.T.test.function({ name: () => world })}
 </p>

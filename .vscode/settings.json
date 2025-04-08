@@ -1,5 +1,6 @@
 {
     "i18n-ally.localesPaths": [
         "packages/sveltekit-lang-test/lang"
-    ]
+    ],
+    "i18n-ally.keystyle": "nested"
 }

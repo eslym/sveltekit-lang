@@ -3,5 +3,6 @@
     "function": "你好${ name() }",
     "param": "你好${ name }",
     "simple": "你好世界"
-  }
+  },
+  "attr": "zh-Hans"
 }

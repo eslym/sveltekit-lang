@@ -132,6 +132,8 @@ async function compile(opts: {
         })
     );
 
+    const null_object = T.fn`no`;
+
     function walk_js(
         obj: any,
         path: (string | number)[]
@@ -139,10 +141,10 @@ async function compile(opts: {
         const current_key = path.join('.');
         if (typeof obj === 'string') {
             const com = compiled.get(current_key)!;
-            const js = T.obj([
+            const js = null_object(T.obj([
                 ['[path]', T.stringify(path.join('.'))],
                 ...com.js.entries()
-            ]);
+            ]));
             const dts = com.params.size
                 ? concat(
                       '[',
@@ -162,9 +164,9 @@ async function compile(opts: {
         for (const key of keys) {
             const { js, dts } = walk_js(obj[key], [...path, key]);
             jss.push([key, js]);
-            dtss.push([key, dts]);
+            dtss.push(['readonly ' + key, dts]);
         }
-        const js = T.obj(jss);
+        const js = null_object(T.obj(jss));
         const dts = T.obj(dtss);
         return { js, dts };
     }
@@ -175,7 +177,8 @@ async function compile(opts: {
         T.lf([
             'import { localize_symbol as path, create_localize } from "@eslym/sveltekit-lang/runtime";',
             '',
-            'const oa = Object.assign.bind(Object);',
+            'const { assign:oa, create:oc } = Object;',
+            'const no = (props)=>oa(oc(null), props);',
             '',
             T.code`export const availableLocales = new Set(${T.stringify(Array.from(availables))});`,
             T.code`export const defaultLocale = ${T.stringify(opts.default_locale)};`,

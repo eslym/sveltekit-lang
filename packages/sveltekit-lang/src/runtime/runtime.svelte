@@ -69,62 +69,22 @@
         throw new Error(`No translation (${tries.join(', ')}) found for ${key}`);
     }
 
-    function value_proxy(target, langs){
+    function proxy(target, langs, sym, map_val) {
         return new Proxy(target, {
             get(target, prop) {
                 const value = Reflect.get(target, prop);
                 if(!value || typeof value !== 'object') return value;
                 if (localize_symbol in value) {
                     const tokens = pick(langs(), value, value[localize_symbol]);
-                    return weak_map_get(tokens, valueSymbol, langs, create_value.bind(null, tokens));
+                    return tokens[sym] ??= map_val(tokens);
                 }
-                return weak_map_get(value, valueSymbol, langs, value_proxy.bind(null, value, langs));
+                return weak_map_get(value, sym, langs, proxy.bind(null, value, langs, sym, map_val));
             },
             set() {
-                throw new Error('Cannot set value on a proxy');
+                throw new Error('Cannot set value on a translations');
             },
             deleteProperty() {
-                throw new Error('Cannot delete property on a proxy');
-            },
-        });
-    }
-
-    function snippet_proxy(target, langs){
-        return new Proxy(target, {
-            get(target, prop) {
-                const value = Reflect.get(target, prop);
-                if(!value || typeof value !== 'object') return value;
-                if (localize_symbol in value) {
-                    const tokens = pick(langs(), value, value[localize_symbol]);
-                    return weak_map_get(tokens, snippetSymbol, langs, create_snippet.bind(null, tokens));
-                }
-                return weak_map_get(value, snippetSymbol, langs, snippet_proxy.bind(null, value, langs));
-            },
-            set() {
-                throw new Error('Cannot set value on a proxy');
-            },
-            deleteProperty() {
-                throw new Error('Cannot delete property on a proxy');
-            },
-        });
-    }
-
-    function component_proxy(target, langs){
-        return new Proxy(target, {
-            get(target, prop) {
-                const value = Reflect.get(target, prop);
-                if(!value || typeof value !== 'object') return value;
-                if (localize_symbol in value) {
-                    const tokens = pick(langs(), value, value[localize_symbol]);
-                    return weak_map_get(tokens, componentSymbol, langs, create_component.bind(null, tokens));
-                }
-                return weak_map_get(value, componentSymbol, langs, component_proxy.bind(null, value, langs));
-            },
-            set() {
-                throw new Error('Cannot set value on a proxy');
-            },
-            deleteProperty() {
-                throw new Error('Cannot delete property on a proxy');
+                throw new Error('Cannot delete property on a translations');
             },
         });
     }
@@ -135,21 +95,24 @@
 
         const get_tries = () => tries;
 
-        const values = value_proxy(translations, get_tries);
-        const snippets = snippet_proxy(translations, get_tries);
-        const components = component_proxy(translations, get_tries);
+        const values = proxy(translations, get_tries, valueSymbol, create_value);
+        const snippets = proxy(translations, get_tries, snippetSymbol, create_snippet);
+        const components = proxy(translations, get_tries, componentSymbol, create_component);
 
-        const as = (value) => create_localize({
-            get value() {
-                return value;
-            },
-            get tries() {
-                return config.tries;
-            },
-            get resolve() {
-                return config.resolve;
-            },
-        }, translations);
+        const as = (value) => {
+            const getter = typeof value === 'function' ? value : () => value;
+            return create_localize({
+                get value() {
+                    return getter();
+                },
+                get tries() {
+                    return config.tries;
+                },
+                get resolve() {
+                    return config.resolve;
+                },
+            }, translations)
+        };
 
         const _pick = (candidates) => {
             return pick(untrack(() => tries), candidates);
