@@ -7,6 +7,6 @@ export default defineConfig({
 		defaultLocale: 'en'
 	})],
 	optimizeDeps: {
-		exclude: ['@eslym/sveltekit-lang/runtime']
+		exclude: ['@eslym/sveltekit-lang', '@eslym/sveltekit-lang/runtime']
 	}
 });

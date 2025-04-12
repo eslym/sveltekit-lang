@@ -1,9 +1,11 @@
 <script module>
     import { untrack } from 'svelte';
     import Self from './runtime.svelte';
+    import BROWSER from 'esm-env/browser';
 
     const noop = () => {};
 
+    const tokens_symbol = Symbol('tokens');
     export const localize_symbol = Symbol('path');
 
     const valueSymbol = Symbol('value');
@@ -22,20 +24,17 @@
     }
     
     function create_snippet(tokens) {
-        return ($$anchor, params = noop) => renderer($$anchor, ()=>tokens, params);
+        if(BROWSER)
+          return ($$anchor, params = noop) => renderer($$anchor, ()=>tokens, params);
+        else
+          return ($$anchor, params = {}) => renderer($$anchor, tokens, params);
     }
 
     function create_component(tokens) {
-        return function ($$anchor, props) {
-            Self($$anchor, {
-                get tokens() {
-                    return tokens;
-                },
-                get params() {
-                    return props;
-                },
-            });
-        }
+        return Object.assign(function ($$anchor, props) {
+            props[tokens_symbol] = tokens;
+            Self($$anchor, props);
+        }, {...Self});
     }
 
     function token_helper(token, params) {
@@ -148,7 +147,7 @@
 </script>
 
 <script>
-    let { tokens, params } = $props();
+    let { ...params } = $props();
 </script>
 
 {#snippet var_helper(value, param) }
@@ -169,4 +168,4 @@
     {/each}
 {/snippet}
 
-{@render renderer(tokens, params)}
+{@render renderer(params[tokens_symbol], params)}
