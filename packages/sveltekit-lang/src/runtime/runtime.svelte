@@ -11,8 +11,9 @@
     const valueSymbol = Symbol('value');
     const snippetSymbol = Symbol('snippet');
     const componentSymbol = Symbol('component');
+    const getterSymbol = Symbol('is getter');
 
-    function weak_map_get(target, sym, key, init){
+    function weak_map_get(target, sym, key, init) {
         if (!target[sym]) {
             target[sym] = new WeakMap();
         }
@@ -22,19 +23,34 @@
         }
         return map.get(key);
     }
-    
-    function create_snippet(tokens) {
-        if(BROWSER)
-          return ($$anchor, params = noop) => renderer($$anchor, ()=>tokens, params);
-        else
-          return ($$anchor, params = {}) => renderer($$anchor, tokens, params);
+
+    function create_snippet(candidates, tries) {
+        const tokens = () => pick(tries(), candidates, candidates[localize_symbol]);
+        if (BROWSER) {
+            return ($$anchor, params = noop) => {
+                return renderer($$anchor, tokens, params);
+            };
+        } else {
+            return ($$anchor, params = {}) => {
+                const tokens = pick(tries(), candidates, candidates[localize_symbol]);
+                return renderer($$anchor, tokens, params);
+            };
+        }
     }
 
-    function create_component(tokens) {
-        return Object.assign(function ($$anchor, props) {
-            props[tokens_symbol] = tokens;
-            Self($$anchor, props);
-        }, {...Self});
+    function create_component(candidates, tries) {
+        return Object.assign(
+            function ($$anchor, props) {
+                Object.defineProperty(props, tokens_symbol, {
+                    get() {
+                        return pick(tries(), candidates, candidates[localize_symbol]);
+                    },
+                    enumerable: true,
+                });
+                return Self($$anchor, props);
+            },
+            { ...Self }
+        );
     }
 
     function token_helper(token, params) {
@@ -48,19 +64,30 @@
         return `${val}`;
     }
 
-    function create_value(tokens) {
-        if (tokens.length === 0) {
-            return '';
-        }
-        if (tokens.length === 1) {
-            return tokens[0];
-        }
-        return (params) =>
-            tokens.map((t) => token_helper(t, params)).join('');
+    function create_value(candidates, tries) {
+        return Object.assign(
+            () => {
+                const tokens = pick(tries(), candidates, candidates[localize_symbol]);
+                if (tokens[tokens_symbol]) {
+                    return tokens[tokens_symbol];
+                }
+                if (tokens.length === 0) {
+                    return (tokens[tokens_symbol] = '');
+                }
+                if (tokens.length === 1) {
+                    return (tokens[tokens_symbol] = tokens[0]);
+                }
+                return (tokens[tokens_symbol] = (params) =>
+                    tokens.map((t) => token_helper(t, params)).join(''));
+            },
+            {
+                [getterSymbol]: true
+            }
+        );
     }
 
     function pick(tries, candidates, key = '<#pick>') {
-        for(const lang of tries) {
+        for (const lang of tries) {
             if (candidates[lang]) {
                 return candidates[lang];
             }
@@ -72,23 +99,28 @@
         return new Proxy(target, {
             get(target, prop) {
                 const value = Reflect.get(target, prop);
-                if(!value || typeof value !== 'object') return value;
+                if (!value || typeof value !== 'object') return value;
                 if (localize_symbol in value) {
-                    const tokens = pick(langs(), value, value[localize_symbol]);
-                    return tokens[sym] ??= map_val(tokens);
+                    const val = (value[sym] ??= map_val(value, langs));
+                    return val[getterSymbol] ? val() : val;
                 }
-                return weak_map_get(value, sym, langs, proxy.bind(null, value, langs, sym, map_val));
+                return weak_map_get(
+                    value,
+                    sym,
+                    langs,
+                    proxy.bind(null, value, langs, sym, map_val)
+                );
             },
             set() {
                 throw new Error('Cannot set value on a translations');
             },
             deleteProperty() {
                 throw new Error('Cannot delete property on a translations');
-            },
+            }
         });
     }
 
-    export function create_localize(config, translations){
+    export function create_localize(config, translations) {
         let current = $derived(config.resolve ? config.resolve(config.value) : config.value);
         let tries = $derived(config.tries ? config.tries(current) : [current]);
 
@@ -100,28 +132,34 @@
 
         const as = (value) => {
             const getter = typeof value === 'function' ? value : () => value;
-            return create_localize({
-                get value() {
-                    return getter();
+            return create_localize(
+                {
+                    get value() {
+                        return getter();
+                    },
+                    get tries() {
+                        return config.tries;
+                    },
+                    get resolve() {
+                        return config.resolve;
+                    }
                 },
-                get tries() {
-                    return config.tries;
-                },
-                get resolve() {
-                    return config.resolve;
-                },
-            }, translations)
+                translations
+            );
         };
 
         const _pick = (candidates) => {
-            return pick(untrack(() => tries), candidates);
-        }
+            return pick(
+                untrack(() => tries),
+                candidates
+            );
+        };
 
         return {
-            get as(){
+            get as() {
                 return as;
             },
-            get value(){
+            get value() {
                 return config.value;
             },
             set value(value) {
@@ -130,18 +168,18 @@
             get current() {
                 return current;
             },
-            get pick(){
-                return tries,_pick;
+            get pick() {
+                return tries, _pick;
             },
-            get T(){
+            get T() {
                 return values;
             },
-            get S(){
+            get S() {
                 return snippets;
             },
-            get C(){
+            get C() {
                 return components;
-            },
+            }
         };
     }
 </script>
@@ -150,9 +188,9 @@
     let { ...params } = $props();
 </script>
 
-{#snippet var_helper(value, param) }
-    {#if typeof value === 'function' }
-        {@render value(param, var_helper) }
+{#snippet var_helper(value, param)}
+    {#if typeof value === 'function'}
+        {@render value(param, var_helper)}
     {:else}
         {value}
     {/if}

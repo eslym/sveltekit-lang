@@ -34,12 +34,14 @@
     {L.T.test.function({ name: () => world })}
 </p>
 <p>
+    Snippet: 
     {#snippet bold_name() }
         <strong>{world}</strong>
     {/snippet}
     {@render L.S.test.function({ name: bold_name })}
 </p>
 <p>
+    Component: 
     <L.C.test.function>
         {#snippet name()}
             <strong>{world}</strong>
