@@ -45,7 +45,7 @@
                     get() {
                         return pick(tries(), candidates, candidates[localize_symbol]);
                     },
-                    enumerable: true,
+                    enumerable: true
                 });
                 return Self($$anchor, props);
             },
@@ -101,7 +101,7 @@
                 const value = Reflect.get(target, prop);
                 if (!value || typeof value !== 'object') return value;
                 if (localize_symbol in value) {
-                    const val = (value[sym] ??= map_val(value, langs));
+                    const val = weak_map_get(value, sym, langs, map_val.bind(null, value, langs));
                     return val[getterSymbol] ? val() : val;
                 }
                 return weak_map_get(
