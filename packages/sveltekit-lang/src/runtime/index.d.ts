@@ -48,13 +48,17 @@ export type TranslationComponents<T extends Readonly<Record<string, any>>> = {
             : never;
 };
 
-export interface Localize<T extends Readonly<Record<string, any>>, D extends string, L extends string> {
+export interface Localize<
+    T extends Readonly<Record<string, any>>,
+    D extends string,
+    L extends string
+> {
     readonly value: string;
     readonly current: string;
     T: TranslationValues<T>;
     S: TranslationSnippets<T>;
     C: TranslationComponents<T>;
-    as(locale: string | (()=>string)): Localize<T, D, L>;
+    as(locale: string | (() => string)): Localize<T, D, L>;
     pick<T extends { [K in D]: any } & { [key in L]?: T[D] }>(candidates: T): T[D];
 }
 
@@ -64,10 +68,15 @@ export type WritableLocalize<
     L extends string
 > = Omit<Localize<T, D, L>, 'value'> & { value: string };
 
-export type LocalizeFn<T extends Readonly<Record<string, any>>, D extends string, L extends string> = {
-    (
-        config?: { resolve?: (value: string) => L, tries?: (value: L) => [L, ...L[]] }
-    ): WritableLocalize<T, D, L>;
+export type LocalizeFn<
+    T extends Readonly<Record<string, any>>,
+    D extends string,
+    L extends string
+> = {
+    (config?: {
+        resolve?: (value: string) => L;
+        tries?: (value: L) => [L, ...L[]];
+    }): WritableLocalize<T, D, L>;
     derived(
         getter: () => string,
         config?: { resolve?: (value: string) => L; tries?: (value: L) => [L, ...L[]] }
@@ -75,4 +84,13 @@ export type LocalizeFn<T extends Readonly<Record<string, any>>, D extends string
 };
 
 export const localize_symbol: unique symbol;
-export function create_localize(config: { value: string }, translations: Readonly<Record<string, any>>): any;
+export function create_localize(
+    config: { value: string },
+    translations: Readonly<Record<string, any>>
+): any;
+
+export declare class TranslationMissingError extends Error {
+    tries: string[];
+    key: string;
+    constructor(tries: string[], key: string);
+}

@@ -2,6 +2,7 @@
     import { untrack } from 'svelte';
     import Self from './runtime.svelte';
     import BROWSER from 'esm-env/browser';
+    import DEV from 'esm-env/development';
 
     const noop = () => {};
 
@@ -12,6 +13,15 @@
     const snippetSymbol = Symbol('snippet');
     const componentSymbol = Symbol('component');
     const getterSymbol = Symbol('is getter');
+
+    export class TranslationMissingError extends Error {
+        constructor(tries, key) {
+            super(`No translation (${tries.join(', ')}) found for ${key}`);
+            this.name = 'TranslationMissingError';
+            this.tries = tries;
+            this.key = key;
+        }
+    }
 
     function weak_map_get(target, sym, key, init) {
         if (!target[sym]) {
@@ -28,6 +38,11 @@
         const tokens = () => pick(tries(), candidates, candidates[localize_symbol]);
         if (BROWSER) {
             return ($$anchor, params = noop) => {
+                if (DEV && typeof params !== 'function') {
+                    console.trace(
+                        'The snippet is not being rendered with {@render ...}, do you accidentally using it as a component?'
+                    );
+                }
                 return renderer($$anchor, tokens, params);
             };
         } else {
@@ -41,6 +56,11 @@
     function create_component(candidates, tries) {
         return Object.assign(
             function ($$anchor, props) {
+                if (DEV && typeof props === 'function') {
+                    console.trace(
+                        'The props is a function, do you accidentally using a component as a snippet?'
+                    );
+                }
                 Object.defineProperty(props, tokens_symbol, {
                     get() {
                         return pick(tries(), candidates, candidates[localize_symbol]);
@@ -92,7 +112,7 @@
                 return candidates[lang];
             }
         }
-        throw new Error(`No translation (${tries.join(', ')}) found for ${key}`);
+        throw new TranslationMissingError(tries, key);
     }
 
     function proxy(target, langs, sym, map_val) {
